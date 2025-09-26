@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 875a63774e0870941bdcb9cc9fc2f611, type: 3}
+  m_Name: DefaultGameConfig
+  m_EditorClassIdentifier: 
+  width: 15
+  height: 15
+  layers: 1
+  startingCurrencySingle: 20
+  startingCurrencyTwo: 32
+  startingCurrencyThree: 40
+  powersLockOnPartialColonization: 1
+  enableQuadrantsOnCentralBoard: 1
+  enableNearMissReporting: 1

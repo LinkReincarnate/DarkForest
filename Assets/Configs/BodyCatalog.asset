@@ -1,0 +1,808 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &-8830788724926165708
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: Stellar Harvest
+  m_EditorClassIdentifier: Assembly-CSharp:DarkForest:GainCurrencyPower
+  powerName: Stellar Harvest
+  timing: 2
+  text: Gain 3 currency each turn while active (requires a Star).
+  amount: 3
+--- !u!114 &-7071387380825559999
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: Scan Column
+  m_EditorClassIdentifier: Assembly-CSharp:DarkForest:ScanColumnPower
+  powerName: Scan Column
+  timing: 0
+  text: Reveal the entire column containing the selected cell.
+  halfRange: 0
+--- !u!114 &-6147409713554832805
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6533302289d01414da4061dcdeeb59cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  type: 9
+  displayName: Nebula
+  populationCapacity: 8
+  price: 9
+  shape:
+    points:
+    - x: 0
+      y: 0
+      z: 0
+    - x: 1
+      y: 0
+      z: 0
+    - x: -1
+      y: 0
+      z: 0
+    - x: 0
+      y: 1
+      z: 0
+    - x: 0
+      y: -1
+      z: 0
+    - x: 1
+      y: 1
+      z: 0
+    - x: -1
+      y: 1
+      z: 0
+    - x: 0
+      y: 2
+      z: 0
+  rulesSummary: Scan beacon on colonization.
+  placementPowers: []
+  colonizationPowers:
+  - {fileID: 2911175415541959182}
+  nearPattern: 2
+--- !u!114 &-6092028776912236137
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6533302289d01414da4061dcdeeb59cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  type: 7
+  displayName: Planet
+  populationCapacity: 8
+  price: 8
+  shape:
+    points:
+    - x: 0
+      y: 0
+      z: 0
+    - x: 1
+      y: 0
+      z: 0
+    - x: 0
+      y: 1
+      z: 0
+    - x: 1
+      y: 1
+      z: 0
+    - x: 0
+      y: 2
+      z: 0
+    - x: 1
+      y: 2
+      z: 0
+    - x: 0
+      y: 3
+      z: 0
+    - x: 1
+      y: 3
+      z: 0
+  rulesSummary: Maintains double probe tempo while intact.
+  placementPowers: []
+  colonizationPowers: []
+  nearPattern: 0
+--- !u!114 &-5087948924077012519
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6533302289d01414da4061dcdeeb59cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  type: 4
+  displayName: Moon
+  populationCapacity: 5
+  price: 5
+  shape:
+    points:
+    - x: 0
+      y: 0
+      z: 0
+    - x: 1
+      y: 0
+      z: 0
+    - x: -1
+      y: 0
+      z: 0
+    - x: 0
+      y: 1
+      z: 0
+    - x: 0
+      y: -1
+      z: 0
+  rulesSummary: Defensive bulwark. Grants a False Report token when placed.
+  placementPowers:
+  - {fileID: 207587781408400519}
+  colonizationPowers: []
+  nearPattern: 1
+--- !u!114 &-4602992028321747911
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6533302289d01414da4061dcdeeb59cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  type: 6
+  displayName: Alien Artifact
+  populationCapacity: 7
+  price: 7
+  shape:
+    points:
+    - x: 0
+      y: 0
+      z: 0
+    - x: 1
+      y: 0
+      z: 0
+    - x: 2
+      y: 0
+      z: 0
+    - x: 0
+      y: 1
+      z: 0
+    - x: 0
+      y: 2
+      z: 0
+    - x: 0
+      y: 3
+      z: 0
+    - x: 1
+      y: 3
+      z: 0
+  rulesSummary: Experimental tech. Cloaks your intel when threatened.
+  placementPowers:
+  - {fileID: -822887706759649555}
+  colonizationPowers:
+  - {fileID: 0}
+  nearPattern: 0
+--- !u!114 &-822887706759649555
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: Afterimage
+  m_EditorClassIdentifier: Assembly-CSharp:DarkForest:EraseProbePower
+  powerName: Afterimage
+  timing: 1
+  text: Erase intel from one of your probed cells.
+--- !u!114 &-117170144277450139
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6533302289d01414da4061dcdeeb59cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  type: 0
+  displayName: Spacejunk
+  populationCapacity: 1
+  price: 1
+  shape:
+    points:
+    - x: 0
+      y: 0
+      z: 0
+  rulesSummary: Near-hit reporting. Cheap decoy.
+  placementPowers: []
+  colonizationPowers: []
+  nearPattern: 1
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 277b3188660d2234db17c4c3cab28da5, type: 3}
+  m_Name: BodyCatalog
+  m_EditorClassIdentifier: 
+  entries:
+  - {fileID: -117170144277450139}
+  - {fileID: 5346731681722672979}
+  - {fileID: 8473172453854870469}
+  - {fileID: 4719659333340332715}
+  - {fileID: -5087948924077012519}
+  - {fileID: 6365108077012278656}
+  - {fileID: -4602992028321747911}
+  - {fileID: -6092028776912236137}
+  - {fileID: 6943241835389024487}
+  - {fileID: -6147409713554832805}
+  - {fileID: 2833085221318754251}
+  - {fileID: 2790188296387769260}
+  - {fileID: 6456435710513249462}
+--- !u!114 &207587781408400519
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: False Report
+  m_EditorClassIdentifier: Assembly-CSharp:DarkForest:FalseReportPower
+  powerName: False Report
+  timing: 1
+  text: Gain one False Report token.
+--- !u!114 &285835858309863331
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: Recloak Segment
+  m_EditorClassIdentifier: Assembly-CSharp:DarkForest:EraseProbePower
+  powerName: Recloak Segment
+  timing: 1
+  text: Erase probing intel from one of your cells.
+--- !u!114 &520248008703293683
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: Half Column Scan
+  m_EditorClassIdentifier: Assembly-CSharp:DarkForest:ScanColumnPower
+  powerName: Half Column Scan
+  timing: 0
+  text: Reveal a segment of the selected column.
+  halfRange: 1
+--- !u!114 &652470555323013977
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: Sensor Burst
+  m_EditorClassIdentifier: Assembly-CSharp:DarkForest:RevealNeighborsPower
+  powerName: Sensor Burst
+  timing: 0
+  text: Reveal a target cell and its orthogonal neighbors.
+  includeDiagonals: 0
+  includeVertical: 0
+--- !u!114 &2790188296387769260
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6533302289d01414da4061dcdeeb59cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  type: 11
+  displayName: Ringworld
+  populationCapacity: 16
+  price: 14
+  shape:
+    points:
+    - x: -2
+      y: -2
+      z: 0
+    - x: -2
+      y: 2
+      z: 0
+    - x: -1
+      y: -2
+      z: 0
+    - x: -1
+      y: 2
+      z: 0
+    - x: 0
+      y: -2
+      z: 0
+    - x: 0
+      y: 2
+      z: 0
+    - x: 1
+      y: -2
+      z: 0
+    - x: 1
+      y: 2
+      z: 0
+    - x: 2
+      y: -2
+      z: 0
+    - x: 2
+      y: 2
+      z: 0
+    - x: -2
+      y: -1
+      z: 0
+    - x: 2
+      y: -1
+      z: 0
+    - x: -2
+      y: 0
+      z: 0
+    - x: 2
+      y: 0
+      z: 0
+    - x: -2
+      y: 1
+      z: 0
+    - x: 2
+      y: 1
+      z: 0
+  rulesSummary: Massive defensive ring.
+  placementPowers: []
+  colonizationPowers:
+  - {fileID: 285835858309863331}
+  nearPattern: 1
+--- !u!114 &2833085221318754251
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6533302289d01414da4061dcdeeb59cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  type: 10
+  displayName: Star
+  populationCapacity: 12
+  price: 15
+  shape:
+    points:
+    - x: 0
+      y: 0
+      z: 0
+    - x: 1
+      y: 0
+      z: 0
+    - x: -1
+      y: 0
+      z: 0
+    - x: 2
+      y: 0
+      z: 0
+    - x: -2
+      y: 0
+      z: 0
+    - x: 0
+      y: 1
+      z: 0
+    - x: 0
+      y: -1
+      z: 0
+    - x: 0
+      y: 2
+      z: 0
+    - x: 0
+      y: -2
+      z: 0
+    - x: 1
+      y: 1
+      z: 0
+    - x: 1
+      y: -1
+      z: 0
+    - x: -1
+      y: -1
+      z: 0
+  rulesSummary: Generates currency every other turn.
+  placementPowers: []
+  colonizationPowers:
+  - {fileID: 6130041632835591721}
+  nearPattern: 3
+--- !u!114 &2911175415541959182
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: Beacon Sweep
+  m_EditorClassIdentifier: Assembly-CSharp:DarkForest:RevealNeighborsPower
+  powerName: Beacon Sweep
+  timing: 0
+  text: Reveal all adjacent cells (including vertical neighbors).
+  includeDiagonals: 1
+  includeVertical: 1
+--- !u!114 &3433069483872981780
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: Scan Row
+  m_EditorClassIdentifier: Assembly-CSharp:DarkForest:ScanRowPower
+  powerName: Scan Row
+  timing: 0
+  text: Reveal one entire row on the opponent board.
+--- !u!114 &4719659333340332715
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6533302289d01414da4061dcdeeb59cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  type: 3
+  displayName: Rocket (4)
+  populationCapacity: 4
+  price: 4
+  shape:
+    points:
+    - x: 0
+      y: 0
+      z: 0
+    - x: 1
+      y: 0
+      z: 0
+    - x: 2
+      y: 0
+      z: 0
+    - x: 3
+      y: 0
+      z: 0
+  rulesSummary: Near-hit. Unlocks Half Column scan when colonized.
+  placementPowers: []
+  colonizationPowers:
+  - {fileID: 520248008703293683}
+  nearPattern: 1
+--- !u!114 &5346731681722672979
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6533302289d01414da4061dcdeeb59cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  type: 1
+  displayName: Satellite
+  populationCapacity: 2
+  price: 2
+  shape:
+    points:
+    - x: 0
+      y: 0
+      z: 0
+    - x: 1
+      y: 0
+      z: 0
+  rulesSummary: Near-hit. Unlocks Scan Row when colonized.
+  placementPowers: []
+  colonizationPowers:
+  - {fileID: 3433069483872981780}
+  nearPattern: 1
+--- !u!114 &6130041632835591721
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: Solar Dividend
+  m_EditorClassIdentifier: Assembly-CSharp:DarkForest:GainCurrencyPower
+  powerName: Solar Dividend
+  timing: 2
+  text: Gain 1 currency each turn while active.
+  amount: 1
+--- !u!114 &6365108077012278656
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6533302289d01414da4061dcdeeb59cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  type: 5
+  displayName: Space Station
+  populationCapacity: 6
+  price: 6
+  shape:
+    points:
+    - x: 0
+      y: 0
+      z: 0
+    - x: 1
+      y: 0
+      z: 0
+    - x: 0
+      y: 1
+      z: 0
+    - x: 1
+      y: 1
+      z: 0
+    - x: 0
+      y: 2
+      z: 0
+    - x: 1
+      y: 2
+      z: 0
+  rulesSummary: Advanced scanning platform.
+  placementPowers: []
+  colonizationPowers:
+  - {fileID: 652470555323013977}
+  nearPattern: 0
+--- !u!114 &6456435710513249462
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6533302289d01414da4061dcdeeb59cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  type: 12
+  displayName: Dyson Sphere
+  populationCapacity: 24
+  price: 18
+  shape:
+    points:
+    - x: -3
+      y: -3
+      z: 0
+    - x: 3
+      y: -3
+      z: 0
+    - x: -3
+      y: -2
+      z: 0
+    - x: 3
+      y: -2
+      z: 0
+    - x: -3
+      y: -1
+      z: 0
+    - x: 3
+      y: -1
+      z: 0
+    - x: -3
+      y: 0
+      z: 0
+    - x: 3
+      y: 0
+      z: 0
+    - x: -3
+      y: 1
+      z: 0
+    - x: 3
+      y: 1
+      z: 0
+    - x: -3
+      y: 2
+      z: 0
+    - x: 3
+      y: 2
+      z: 0
+    - x: -3
+      y: 3
+      z: 0
+    - x: 3
+      y: 3
+      z: 0
+    - x: -2
+      y: -3
+      z: 0
+    - x: -2
+      y: 3
+      z: 0
+    - x: -1
+      y: -3
+      z: 0
+    - x: -1
+      y: 3
+      z: 0
+    - x: 0
+      y: -3
+      z: 0
+    - x: 0
+      y: 3
+      z: 0
+    - x: 1
+      y: -3
+      z: 0
+    - x: 1
+      y: 3
+      z: 0
+    - x: 2
+      y: -3
+      z: 0
+    - x: 2
+      y: 3
+      z: 0
+  rulesSummary: Requires a Star. Upgrades its economy.
+  placementPowers: []
+  colonizationPowers:
+  - {fileID: -8830788724926165708}
+  nearPattern: 1
+--- !u!114 &6943241835389024487
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6533302289d01414da4061dcdeeb59cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  type: 8
+  displayName: Asteroid Belt
+  populationCapacity: 12
+  price: 10
+  shape:
+    points:
+    - x: 0
+      y: 0
+      z: 0
+    - x: 1
+      y: 0
+      z: 0
+    - x: 2
+      y: 0
+      z: 0
+    - x: 0
+      y: 1
+      z: 0
+    - x: 1
+      y: 1
+      z: 0
+    - x: 2
+      y: 1
+      z: 0
+    - x: 0
+      y: 2
+      z: 0
+    - x: 1
+      y: 2
+      z: 0
+    - x: 2
+      y: 2
+      z: 0
+    - x: 0
+      y: 3
+      z: 0
+    - x: 1
+      y: 3
+      z: 0
+    - x: 2
+      y: 3
+      z: 0
+  rulesSummary: Sturdy debris field that pays out on survival.
+  placementPowers: []
+  colonizationPowers:
+  - {fileID: 0}
+  nearPattern: 0
+--- !u!114 &8473172453854870469
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6533302289d01414da4061dcdeeb59cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  type: 2
+  displayName: Rocket (3)
+  populationCapacity: 3
+  price: 3
+  shape:
+    points:
+    - x: 0
+      y: 0
+      z: 0
+    - x: 1
+      y: 0
+      z: 0
+    - x: 2
+      y: 0
+      z: 0
+  rulesSummary: No near-hit. Unlocks Scan Column when colonized.
+  placementPowers: []
+  colonizationPowers:
+  - {fileID: -7071387380825559999}
+  nearPattern: 0
