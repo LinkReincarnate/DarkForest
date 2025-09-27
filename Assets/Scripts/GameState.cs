@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
@@ -339,6 +339,11 @@ namespace DarkForest
                 GrantPowers(attacker, body.Definition.colonizationPowers, body);
                 body.ColonizationPowersGranted = true;
             }
+
+            if (body.Definition.type == BodyType.Star && body.IsFullyColonized)
+            {
+                RevokeSolarDividend(defender, body);
+            }
         }
 
         public void HandlePlacement(PlayerState owner, BodyInstance instance)
@@ -379,6 +384,20 @@ namespace DarkForest
                 var card = CreateCardForPower(granted, sourceBody);
                 recipient.hand.Add(card);
             }
+        }
+
+        void RevokeSolarDividend(PlayerState owner, BodyInstance body)
+        {
+            if (owner == null || body == null) return;
+
+            var revoked = owner.readyPowers
+                .Where(gp => gp != null && gp.sourceBody == body && gp.power is GainCurrencyPower)
+                .ToList();
+
+            if (revoked.Count == 0) return;
+
+            owner.readyPowers.RemoveAll(gp => revoked.Contains(gp));
+            owner.hand.RemoveAll(card => card != null && card.grantedPower != null && revoked.Contains(card.grantedPower));
         }
 
         PlayerCard CreateCardForPower(GrantedPower granted, BodyInstance sourceBody)
@@ -509,3 +528,5 @@ namespace DarkForest
         }
     }
 }
+
+

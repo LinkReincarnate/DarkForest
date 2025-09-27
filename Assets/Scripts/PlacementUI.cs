@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using UnityEngine;
 
 namespace DarkForest
@@ -46,6 +46,7 @@ namespace DarkForest
             {
                 UpgradeAlienArtifact(def);
                 UpgradeAsteroidBelt(def);
+                UpgradeStar(def);
             }
         }
 
@@ -144,6 +145,73 @@ namespace DarkForest
                 def.rulesSummary = "Sturdy debris field that pays out on survival.";
             }
         }
+
+        void UpgradeStar(BodyDefinition def)
+        {
+            if (def == null || def.type != BodyType.Star) return;
+
+            def.placementPowers = EnsureSolarDividend(def.placementPowers);
+            def.colonizationPowers = EnsureSolarDividend(def.colonizationPowers);
+
+            if (string.IsNullOrWhiteSpace(def.rulesSummary) || def.rulesSummary.Contains("every other turn"))
+            {
+                def.rulesSummary = "Generates currency each turn while active.";
+            }
+        }
+
+        Power[] EnsureSolarDividend(Power[] powers)
+        {
+            bool hasDividend = false;
+
+            if (powers != null)
+            {
+                for (int i = 0; i < powers.Length; i++)
+                {
+                    if (powers[i] is GainCurrencyPower gain)
+                    {
+                        ConfigureSolarDividend(gain);
+                        hasDividend = true;
+                    }
+                }
+            }
+
+            if (hasDividend) return powers;
+
+            var power = ScriptableObject.CreateInstance<GainCurrencyPower>();
+            ConfigureSolarDividend(power);
+            return AppendPower(powers, power);
+        }
+
+        void ConfigureSolarDividend(GainCurrencyPower power)
+        {
+            if (!power) return;
+
+            power.name = "Solar Dividend";
+            power.powerName = "Solar Dividend";
+            power.text = "Gain 1 currency each turn while active.";
+            power.timing = PowerTiming.PassiveUpkeep;
+            power.amount = 1;
+        }
+
+        Power[] AppendPower(Power[] existing, Power addition)
+        {
+            if (addition == null) return existing;
+
+            if (existing == null || existing.Length == 0)
+            {
+                return new[] { addition };
+            }
+
+            var result = new Power[existing.Length + 1];
+            for (int i = 0; i < existing.Length; i++)
+            {
+                result[i] = existing[i];
+            }
+
+            result[existing.Length] = addition;
+            return result;
+        }
+
         void OnGUI()
         {
             if (!game || game.players.Count == 0) return;
@@ -956,15 +1024,5 @@ namespace DarkForest
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
 
 

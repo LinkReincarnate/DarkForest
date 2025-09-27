@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 namespace DarkForest
@@ -171,6 +171,10 @@ namespace DarkForest
                     new V3(1,1,0), new V3(1,-1,0), new V3(-1,-1,0)
                 }),
                 "Generates currency every other turn.");
+            star.placementPowers = new[]
+            {
+                Power<GainCurrencyPower>("Solar Dividend", "Gain 1 currency each turn while active.", PowerTiming.PassiveUpkeep, p => p.amount = 1)
+            };
             star.colonizationPowers = new[]
             {
                 Power<GainCurrencyPower>("Solar Dividend", "Gain 1 currency each turn while active.", PowerTiming.PassiveUpkeep, p => p.amount = 1)
@@ -236,4 +240,5 @@ namespace DarkForest
         }
     }
 }
+
 
