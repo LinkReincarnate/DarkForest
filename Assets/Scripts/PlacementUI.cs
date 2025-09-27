@@ -36,6 +36,27 @@ namespace DarkForest
             shop = catalog && catalog.entries != null ? catalog.entries.ToArray() : new BodyDefinition[0];
             EnsureRuntimeUpgrades();
             RefreshViews();
+
+            if (game != null)
+            {
+                game.OnPlayerAdvanced += OnGamePlayerAdvanced;
+            }
+        }
+
+        void OnDestroy()
+        {
+            if (game != null)
+            {
+                game.OnPlayerAdvanced -= OnGamePlayerAdvanced;
+            }
+        }
+
+        void OnGamePlayerAdvanced()
+        {
+            // Called when GameState actually advances the current player (after any delay).
+            awaitingTurnAdvance = false;
+            probesTakenThisTurn = 0;
+            RefreshViews();
         }
 
         void EnsureRuntimeUpgrades()
@@ -1199,6 +1220,7 @@ namespace DarkForest
             probesTakenThisTurn = 0;
 
             game.AdvanceAfterProbe();
+            // Refresh immediately so the UI remains responsive while GameState may advance after a delay.
             RefreshViews();
         }
 

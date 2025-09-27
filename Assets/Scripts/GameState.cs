@@ -42,6 +42,7 @@ namespace DarkForest
         public List<BodyInstance> bodies = new List<BodyInstance>();
         public int falseReportTokens = 0;
         public bool placementReady = false;
+        public int preferredTargetIndex = -1;
         public List<GrantedPower> readyPowers = new List<GrantedPower>();
         public List<PlayerCard> hand = new List<PlayerCard>();
 
@@ -63,6 +64,8 @@ namespace DarkForest
         public int currentIndex = 0;
         public GamePhase phase = GamePhase.Placement;
         public System.Random rng = new System.Random();
+    [Tooltip("Seconds to wait after a probe before advancing to the next player. Set to 0 for immediate advance.")]
+    public float postProbeDelay = 1.0f;
         public bool gameOver = false;
         public PlayerState winner;
         public PendingProbeData pendingProbe;
@@ -74,6 +77,9 @@ namespace DarkForest
         }
 
         private readonly List<SensorLogSubscription> activeSensorLoggers = new List<SensorLogSubscription>();
+    private Coroutine scheduledAdvanceCoroutine = null;
+    // Fired when the current player is advanced (after any delay).
+    public System.Action OnPlayerAdvanced;
 
 
         public bool HasPendingProbe => pendingProbe != null;
@@ -106,7 +112,14 @@ namespace DarkForest
 
         public void NewGame(int playersCount, int depthLevels)
         {
-            playerCount = playersCount;
+            int maxPlayers = System.Enum.GetValues(typeof(Team)).Length;
+            int safeMaxPlayers = Mathf.Max(2, maxPlayers);
+            playerCount = Mathf.Clamp(playersCount, 2, safeMaxPlayers);
+            if (playerCount != playersCount)
+            {
+                Debug.LogWarning("[GameState] Requested {playersCount} players but clamped to {playerCount} (max supported).");
+            }
+
             depth = depthLevels;
             players.Clear();
 
@@ -117,7 +130,8 @@ namespace DarkForest
                     team = (Team)i,
                     hiddenBoard = new Board(config.width, config.height, depthLevels),
                     currency = config.GetStartingCurrency(playerCount, depthLevels),
-                    placementReady = false
+                    placementReady = false,
+                    preferredTargetIndex = -1
                 };
                 players.Add(ps);
             }
@@ -140,15 +154,25 @@ namespace DarkForest
         {
             if (player == null || players.Count == 0) return null;
 
-            foreach (var candidate in players)
+            int startIndex = players.IndexOf(player);
+            if (startIndex < 0)
             {
-                if (candidate != player && !candidate.IsEliminated)
+                startIndex = Mathf.Clamp(currentIndex, 0, players.Count - 1);
+            }
+
+            for (int offset = 1; offset <= players.Count; offset++)
+            {
+                int idx = (startIndex + offset) % players.Count;
+                var candidate = players[idx];
+                if (candidate != null && candidate != player && !candidate.IsEliminated)
                 {
                     return candidate;
                 }
             }
 
-            return players.FirstOrDefault(p => p != player) ?? player;
+            var fallback = players.FirstOrDefault(p => p != null && p != player && !p.IsEliminated)
+                         ?? players.FirstOrDefault(p => p != null && p != player);
+            return fallback ?? player;
         }
 
         public void CompletePlacementForCurrentPlayer()
@@ -191,6 +215,15 @@ namespace DarkForest
         {
             if (phase != GamePhase.Probing || players.Count == 0 || gameOver || HasPendingProbe) return;
 
+            // If a post-probe delay is configured, start a coroutine to advance after the delay so the player
+            // can see the result of their probe. If delay is zero or negative, advance immediately.
+            if (postProbeDelay > 0f)
+            {
+                if (scheduledAdvanceCoroutine != null) return; // already scheduled
+                scheduledAdvanceCoroutine = StartCoroutine(AdvanceAfterProbeWithDelay(postProbeDelay));
+                return;
+            }
+
             for (int i = 1; i <= players.Count; i++)
             {
                 int idx = (currentIndex + i) % players.Count;
@@ -198,9 +231,37 @@ namespace DarkForest
                 {
                     currentIndex = idx;
                     ResetPassivePowers(players[idx]);
+                    OnPlayerAdvanced?.Invoke();
                     return;
                 }
             }
+        }
+
+        System.Collections.IEnumerator AdvanceAfterProbeWithDelay(float delay)
+        {
+            // Wait for the UI/animation to show the probe result
+            yield return new WaitForSeconds(delay);
+
+            // Double-check that advancing is still appropriate (no pending probe, not game over)
+            if (phase != GamePhase.Probing || players.Count == 0 || gameOver || HasPendingProbe)
+            {
+                scheduledAdvanceCoroutine = null;
+                yield break;
+            }
+
+            for (int i = 1; i <= players.Count; i++)
+            {
+                int idx = (currentIndex + i) % players.Count;
+                if (!players[idx].IsEliminated)
+                {
+                    currentIndex = idx;
+                    ResetPassivePowers(players[idx]);
+                    scheduledAdvanceCoroutine = null;
+                    OnPlayerAdvanced?.Invoke();
+                    yield break;
+                }
+            }
+            scheduledAdvanceCoroutine = null;
         }
 
         public void ActivateSpaceStationLogging(PlayerState owner, BodyInstance station)
