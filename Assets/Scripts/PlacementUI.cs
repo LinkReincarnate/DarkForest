@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using UnityEngine;
 
 namespace DarkForest
@@ -311,14 +311,18 @@ namespace DarkForest
             int probesRemaining = active != null ? Mathf.Max(0, probesPerTurn - probesTakenThisTurn) : 0;
             GUILayout.Label($"Probes remaining this turn: {probesRemaining} / {probesPerTurn}");
 
-            GUI.enabled = awaitingTurnAdvance && !awaitingDefenderDecision;
-            if (GUILayout.Button("End Turn"))
+            bool canManualPass = active != null && !awaitingDefenderDecision && !game.gameOver;
+            GUI.enabled = canManualPass;
+            if (GUILayout.Button(probesRemaining > 0 ? "End Turn (pass remaining probes)" : "End Turn"))
             {
-                game.AdvanceAfterProbe();
-                awaitingTurnAdvance = false;
-                placingDuringTurn = false;
-                pendingCard = null;
-                RefreshViews();
+                if (canManualPass)
+                {
+                    probesTakenThisTurn = Mathf.Max(probesTakenThisTurn, probesPerTurn);
+                    if (!TryAutoAdvanceAfterProbes())
+                    {
+                        RefreshViews();
+                    }
+                }
             }
             GUI.enabled = true;
         }
@@ -381,6 +385,8 @@ namespace DarkForest
                 return;
             }
 
+            EnsureSelectedBodyUnlocked(active);
+
             shopScroll = GUILayout.BeginScrollView(shopScroll, GUILayout.Height(200f));
             for (int i = 0; i < shop.Length; i++)
             {
@@ -388,8 +394,17 @@ namespace DarkForest
                 if (body == null) continue;
 
                 bool affordable = active != null && active.currency >= body.price;
-                GUI.enabled = affordable && !awaitingDefenderDecision;
-                if (GUILayout.Toggle(selectedIndex == i, FormatShopEntry(body), "Button"))
+                bool unlocked = IsBodyUnlockedForPurchase(active, body);
+                string label = FormatShopEntry(body);
+                if (!unlocked)
+                {
+                    label += " (requires a Star in play)";
+                }
+
+                GUI.enabled = affordable && unlocked && !awaitingDefenderDecision;
+                bool isSelected = unlocked && selectedIndex == i;
+                bool clicked = GUILayout.Toggle(isSelected, label, "Button");
+                if (clicked && unlocked)
                 {
                     selectedIndex = i;
                 }
@@ -704,8 +719,13 @@ namespace DarkForest
         BodyDefinition GetSelectedBody()
         {
             if (shop == null || shop.Length == 0) return null;
+
+            var active = game != null ? game.Current : null;
+            EnsureSelectedBodyUnlocked(active);
+
             selectedIndex = Mathf.Clamp(selectedIndex, 0, shop.Length - 1);
-            return shop[selectedIndex];
+            var body = shop[selectedIndex];
+            return IsBodyUnlockedForPurchase(active, body) ? body : null;
         }
 
         int GetProbesPerTurn(PlayerState player)
@@ -824,13 +844,18 @@ namespace DarkForest
             var def = GetSelectedBody();
             if (def == null)
             {
-                Debug.LogWarning("Selected body definition is null.");
+                Debug.LogWarning("No valid body is selected for placement.");
                 return;
             }
 
             if (me.currency < def.price)
             {
                 Debug.Log("Not enough currency");
+                return;
+            }
+
+            if (!ValidatePlacementPrerequisites(me, def, ox, oy, oz))
+            {
                 return;
             }
 
@@ -888,6 +913,7 @@ namespace DarkForest
             if (!counted)
             {
                 Debug.LogWarning($"{attacker.team} probe at ({x},{y},{z}) was invalid.");
+                awaitingTurnAdvance = false;
                 RefreshViews();
                 return;
             }
@@ -899,7 +925,12 @@ namespace DarkForest
             Debug.Log($"{attacker.team} probes ({x},{y},{z}) -> {resultText}");
 
             placingDuringTurn = false;
-            awaitingTurnAdvance = !game.gameOver;
+            if (TryAutoAdvanceAfterProbes())
+            {
+                return;
+            }
+
+            awaitingTurnAdvance = false;
             RefreshViews();
         }
 
@@ -915,7 +946,13 @@ namespace DarkForest
 
             awaitingDefenderDecision = false;
             placingDuringTurn = false;
-            awaitingTurnAdvance = !game.gameOver;
+
+            if (TryAutoAdvanceAfterProbes())
+            {
+                return;
+            }
+
+            awaitingTurnAdvance = false;
             RefreshViews();
         }
 
@@ -1018,9 +1055,156 @@ namespace DarkForest
             RefreshViews();
         }
 
+        void EnsureSelectedBodyUnlocked(PlayerState player)
+        {
+            if (shop == null || shop.Length == 0)
+            {
+                selectedIndex = 0;
+                return;
+            }
+
+            selectedIndex = Mathf.Clamp(selectedIndex, 0, shop.Length - 1);
+            var current = shop[selectedIndex];
+            if (current == null || !IsBodyUnlockedForPurchase(player, current))
+            {
+                selectedIndex = FindFirstUnlockedBodyIndex(player);
+            }
+        }
+
+        int FindFirstUnlockedBodyIndex(PlayerState player)
+        {
+            if (shop == null || shop.Length == 0) return 0;
+
+            for (int i = 0; i < shop.Length; i++)
+            {
+                var candidate = shop[i];
+                if (candidate != null && IsBodyUnlockedForPurchase(player, candidate))
+                {
+                    return i;
+                }
+            }
+
+            for (int i = 0; i < shop.Length; i++)
+            {
+                if (shop[i] != null)
+                {
+                    return i;
+                }
+            }
+
+            return Mathf.Clamp(selectedIndex, 0, shop.Length - 1);
+        }
+
+        bool IsBodyUnlockedForPurchase(PlayerState player, BodyDefinition body)
+        {
+            if (body == null) return false;
+            if (body.type == BodyType.DysonSphere)
+            {
+                return PlayerHasBodyOfType(player, BodyType.Star);
+            }
+            return true;
+        }
+
+        bool PlayerHasBodyOfType(PlayerState player, BodyType type)
+        {
+            return player != null && player.bodies.Any(b => b != null && b.Definition != null && b.Definition.type == type);
+        }
+
+        bool DysonPlacementEncirclesStar(PlayerState player, int ox, int oy, int oz)
+        {
+            if (player == null) return false;
+
+            foreach (var body in player.bodies)
+            {
+                if (body?.Definition == null || body.Definition.type != BodyType.Star) continue;
+                if (body.OccupiedCells == null || body.OccupiedCells.Count == 0) continue;
+
+                bool sameLayer = body.OccupiedCells.All(c => c != null && c.z == oz);
+                if (!sameLayer) continue;
+
+                bool inside = true;
+                foreach (var cell in body.OccupiedCells)
+                {
+                    int dx = cell.x - ox;
+                    int dy = cell.y - oy;
+                    if (Mathf.Abs(dx) > 2 || Mathf.Abs(dy) > 2)
+                    {
+                        inside = false;
+                        break;
+                    }
+                }
+
+                if (inside)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        bool ValidatePlacementPrerequisites(PlayerState player, BodyDefinition def, int ox, int oy, int oz)
+        {
+            if (player == null || def == null) return false;
+
+            if (def.type == BodyType.DysonSphere)
+            {
+                if (!PlayerHasBodyOfType(player, BodyType.Star))
+                {
+                    Debug.Log("Dyson Sphere requires a Star already in play.");
+                    return false;
+                }
+
+                if (!DysonPlacementEncirclesStar(player, ox, oy, oz))
+                {
+                    hiddenView?.ShowPlacementPreview(def, ox, oy);
+                    Debug.Log("Dyson Sphere must be placed to encircle one of your Stars.");
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        bool TryAutoAdvanceAfterProbes()
+        {
+            if (!game || game.gameOver) return false;
+            if (game.phase != GameState.GamePhase.Probing) return false;
+            if (awaitingDefenderDecision || game.HasPendingProbe) return false;
+
+            var active = game.Current;
+            if (active == null) return false;
+
+            int probesPerTurn = Mathf.Max(0, GetProbesPerTurn(active));
+            if (probesPerTurn > 0 && probesTakenThisTurn < probesPerTurn)
+            {
+                awaitingTurnAdvance = false;
+                return false;
+            }
+
+            AdvanceToNextProbePlayer();
+            return true;
+        }
+
+        void AdvanceToNextProbePlayer()
+        {
+            if (!game || game.gameOver) return;
+            if (game.phase != GameState.GamePhase.Probing) return;
+
+            awaitingTurnAdvance = false;
+            placingDuringTurn = false;
+            pendingCard = null;
+
+            cachedTurnPlayer = null;
+            probesTakenThisTurn = 0;
+
+            game.AdvanceAfterProbe();
+            RefreshViews();
+        }
+
         bool HasAffordableBody(PlayerState player)
         {
-            return shop != null && player != null && shop.Any(body => body != null && player.currency >= body.price);
+            return shop != null && player != null && shop.Any(body => body != null && IsBodyUnlockedForPurchase(player, body) && player.currency >= body.price);
         }
     }
 }

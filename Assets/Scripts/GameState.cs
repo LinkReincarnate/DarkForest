@@ -355,6 +355,11 @@ namespace DarkForest
                 GrantPowers(owner, instance.Definition.placementPowers, instance);
             }
 
+            if (instance.Definition.type == BodyType.Moon)
+            {
+                EnsureMoonFalseReport(owner, instance);
+            }
+
             instance.PlacementPowersGranted = true;
         }
 
@@ -384,6 +389,54 @@ namespace DarkForest
                 var card = CreateCardForPower(granted, sourceBody);
                 recipient.hand.Add(card);
             }
+        }
+
+        void EnsureMoonFalseReport(PlayerState owner, BodyInstance sourceBody)
+        {
+            if (owner == null || sourceBody == null) return;
+
+            var existing = owner.readyPowers.FirstOrDefault(gp => gp != null && gp.sourceBody == sourceBody && gp.power is FalseReportPower);
+            if (existing != null)
+            {
+                bool hasCard = owner.hand.Any(card => card != null && card.grantedPower == existing);
+                if (!hasCard)
+                {
+                    owner.hand.Add(CreateCardForPower(existing, sourceBody));
+                }
+                return;
+            }
+
+            Power prototype = null;
+            if (sourceBody.Definition != null && sourceBody.Definition.placementPowers != null)
+            {
+                prototype = sourceBody.Definition.placementPowers.FirstOrDefault(p => p is FalseReportPower);
+            }
+
+            if (!prototype)
+            {
+                var generated = ScriptableObject.CreateInstance<FalseReportPower>();
+                generated.name = "False Report";
+                generated.powerName = "False Report";
+                generated.text = "Gain one False Report token.";
+                generated.timing = PowerTiming.DefensiveFaceDown;
+                prototype = generated;
+            }
+
+            var clone = Instantiate(prototype);
+            clone.name = prototype.name;
+            clone.powerName = prototype.powerName;
+            clone.timing = prototype.timing;
+            clone.text = prototype.text;
+
+            var granted = new GrantedPower
+            {
+                power = clone,
+                sourceBody = sourceBody,
+                consumed = false
+            };
+
+            owner.readyPowers.Add(granted);
+            owner.hand.Add(CreateCardForPower(granted, sourceBody));
         }
 
         void RevokeSolarDividend(PlayerState owner, BodyInstance body)
