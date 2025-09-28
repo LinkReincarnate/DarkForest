@@ -299,6 +299,26 @@ namespace DarkForest
                 {
                     var stationName = subscription.station.Definition != null ? subscription.station.Definition.displayName : "Space Station";
                     Debug.Log($"[Sensor Burst] {stationName} has been partially colonized. Sensors offline for {subscription.owner.team}.");
+
+                    // If this station has become fully colonized, remove the visual card
+                    // that the placing player received when they placed the station.
+                    try
+                    {
+                        if (subscription.station.IsFullyColonized)
+                        {
+                            var placer = players.FirstOrDefault(p => p != null && p.team == subscription.station.Owner);
+                            if (placer != null)
+                            {
+                                int removed = placer.hand.RemoveAll(card => card != null && card.sourceType == BodyType.SpaceStation && card.title == subscription.station.Definition.displayName && card.grantedPower == null);
+                                if (removed > 0)
+                                {
+                                    Debug.Log($"[Sensor Burst] Removed {removed} Space Station card(s) from {placer.team}'s hand due to full colonization of {subscription.station.Definition.displayName}.");
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+
                     activeSensorLoggers.RemoveAt(i);
                 }
             }
@@ -362,6 +382,14 @@ namespace DarkForest
             if (spendToken && defender.falseReportTokens > 0 && cell != null && cell.occupant != null)
             {
                 defender.falseReportTokens--;
+                // When a false report token is spent, also consume and remove one corresponding FalseReport granted power/card if present
+                var consumed = defender.readyPowers.FirstOrDefault(gp => gp != null && gp.power is FalseReportPower && !gp.consumed);
+                if (consumed != null)
+                {
+                    consumed.consumed = true;
+                    // remove the card associated with this granted power
+                    defender.hand.RemoveAll(card => card != null && card.grantedPower == consumed);
+                }
                 cell.probed = true;
                 cell.lastReport = CellReport.Miss;
                 return ProbeOutcome.FalseReport();
@@ -399,7 +427,155 @@ namespace DarkForest
             {
                 GrantPowers(attacker, body.Definition.colonizationPowers, body);
                 body.ColonizationPowersGranted = true;
+                // If GrantPowers somehow didn't add any granted powers for this body (edge cases when prototypes are null),
+                // create the expected granted power(s) for known body types so the colonizer receives a functional card.
+                if (attacker != null)
+                {
+                    var existingForBody = attacker.readyPowers.FirstOrDefault(gp => gp != null && gp.sourceBody == body);
+                            if (existingForBody == null)
+                            {
+                                // Try to use canonical prototypes from the game's catalog for this body type.
+                                bool grantedFromCatalog = false;
+                                try
+                                {
+                                    BodyDefinition canonical = null;
+                                    if (this.catalog != null)
+                                    {
+                                        canonical = this.catalog.Get(body.Definition.type);
+                                    }
+
+                                    // If the assigned catalog doesn't contain the body, build a runtime catalog and try again
+                                    if (canonical == null)
+                                    {
+                                        try
+                                        {
+                                            var runtimeCat = BodyFactory.BuildCatalog();
+                                            if (runtimeCat != null)
+                                            {
+                                                canonical = runtimeCat.Get(body.Definition.type);
+                                            }
+                                        }
+                                        catch { /* ignore build failures */ }
+                                    }
+
+                                    if (canonical != null && canonical.colonizationPowers != null && canonical.colonizationPowers.Length > 0)
+                                    {
+                                        GrantPowers(attacker, canonical.colonizationPowers, body);
+                                        grantedFromCatalog = attacker.readyPowers.Any(gp => gp != null && gp.sourceBody == body);
+                                    }
+                                }
+                                catch { /* ignore catalog lookup failures and continue to fallbacks */ }
+
+                                if (!grantedFromCatalog)
+                                {
+                                    // Create fallback granted powers for Satellite, Rocket3, Rocket4
+                                    GrantedPower fallback = null;
+                                    if (body.Definition.type == BodyType.Satellite)
+                                    {
+                                        var p = ScriptableObject.CreateInstance<ScanRowPower>();
+                                        p.name = "Scan Row";
+                                        p.powerName = "Scan Row";
+                                        p.text = "Reveal one entire row on the opponent board.";
+                                        p.timing = PowerTiming.OffensiveFaceUp;
+                                        fallback = new GrantedPower { power = p, sourceBody = body, consumed = false };
+                                    }
+                                    else if (body.Definition.type == BodyType.Rocket3)
+                                    {
+                                        var p = ScriptableObject.CreateInstance<ScanColumnPower>();
+                                        p.name = "Scan Column";
+                                        p.powerName = "Scan Column";
+                                        p.text = "Reveal the entire column containing the selected cell.";
+                                        p.timing = PowerTiming.OffensiveFaceUp;
+                                        fallback = new GrantedPower { power = p, sourceBody = body, consumed = false };
+                                    }
+                                    else if (body.Definition.type == BodyType.Rocket4)
+                                    {
+                                        var p = ScriptableObject.CreateInstance<ScanColumnPower>();
+                                        p.name = "Half Column Scan";
+                                        p.powerName = "Half Column Scan";
+                                        p.text = "Reveal a segment of the selected column.";
+                                        p.timing = PowerTiming.OffensiveFaceUp;
+                                        try { ((ScanColumnPower)p).halfRange = true; } catch { }
+                                        fallback = new GrantedPower { power = p, sourceBody = body, consumed = false };
+                                    }
+
+                                    if (fallback != null)
+                                    {
+                                        attacker.readyPowers.Add(fallback);
+                                        attacker.hand.Add(CreateCardForPower(fallback, body));
+                                        Debug.Log($"[GameState] Fallback: granted '{fallback.power?.powerName}' to {attacker.team} for body '{body.Definition?.displayName}'.");
+                                    }
+                                }
+                            }
+                }
+                // Diagnostic: report what granted powers and hand entries exist for attacker
+                if (attacker != null)
+                {
+                    var gps = attacker.readyPowers.Where(gp => gp != null && gp.sourceBody == body).ToList();
+                    Debug.Log($"[GameState] After GrantPowers: attacker.readyPowers has {gps.Count} entries for body '{(body?.Definition?.displayName ?? "<unknown>")}'.");
+                    foreach (var gp in gps)
+                    {
+                        Debug.Log($"[GameState] ReadyPower: {(gp.power != null ? gp.power.powerName : "<null>")}, consumed={gp.consumed}");
+                    }
+
+                    var handCards = attacker.hand.Where(c => c != null).ToList();
+                    Debug.Log($"[GameState] Attacker hand contains {handCards.Count} cards after colonization for body '{(body?.Definition?.displayName ?? "<unknown>")}'.");
+                    foreach (var c in handCards)
+                    {
+                        Debug.Log($"[GameState] Hand card: title='{c.title}', hasGranted={(c.grantedPower!=null)}, grantedPowerName={(c.grantedPower!=null && c.grantedPower.power!=null?c.grantedPower.power.powerName:"<null>")}");
+                    }
+                }
+                // Award a visual card for certain bodies to the colonizer (old UI behavior)
+                if (attacker != null && body.Definition != null)
+                {
+                    var t = body.Definition.type;
+                    if (t == BodyType.Satellite || t == BodyType.Rocket3 || t == BodyType.Rocket4)
+                    {
+                        // If a card representing the granted power for this body already exists, don't add a duplicate.
+                        bool hasLinkedCard = attacker.hand.Any(c => c != null && c.grantedPower != null && c.grantedPower.sourceBody == body);
+                        if (!hasLinkedCard)
+                        {
+                            // Try to find the granted power that was just added by GrantPowers and create a functional card for it.
+                            var linkedGranted = attacker.readyPowers.FirstOrDefault(gp => gp != null && gp.sourceBody == body);
+                            if (linkedGranted != null)
+                            {
+                                var powerCard = CreateCardForPower(linkedGranted, body);
+                                attacker.hand.Add(powerCard);
+                            }
+                            else
+                            {
+                                // Fallback: add a visual body card (non-playable). This preserves the previous visual behavior.
+                                var bodyCard = CreateCardForBody(body);
+                                if (bodyCard != null)
+                                {
+                                    attacker.hand.Add(bodyCard);
+                                }
+                            }
+                        }
+                    }
+                }
             }
+
+            // If a Space Station has become fully colonized, ensure the visual card
+            // that was added to the player who placed it (if any) is removed. This
+            // is done here so removal happens even if the sensor subscription was
+            // removed earlier (e.g., when partially colonized).
+            try
+            {
+                if (body.Definition.type == BodyType.SpaceStation && body.IsFullyColonized)
+                {
+                    var placer = players.FirstOrDefault(p => p != null && p.team == body.Owner);
+                    if (placer != null)
+                    {
+                        int removed = placer.hand.RemoveAll(card => card != null && card.sourceType == BodyType.SpaceStation && card.title == body.Definition.displayName && card.grantedPower == null);
+                        if (removed > 0)
+                        {
+                            Debug.Log($"[GameState] Removed {removed} placed Space Station card(s) from {placer.team}'s hand due to full colonization of {body.Definition.displayName}.");
+                        }
+                    }
+                }
+            }
+            catch { }
 
             if (body.Definition.type == BodyType.Star && body.IsFullyColonized)
             {
@@ -421,6 +597,12 @@ namespace DarkForest
                 EnsureMoonFalseReport(owner, instance);
             }
 
+            // If a Space Station is placed, activate sensor logging for the placing player
+            if (instance.Definition.type == BodyType.SpaceStation)
+            {
+                ActivateSpaceStationLogging(owner, instance);
+            }
+
             instance.PlacementPowersGranted = true;
         }
 
@@ -428,9 +610,94 @@ namespace DarkForest
         {
             if (recipient == null || prototypes == null) return;
 
-            foreach (var proto in prototypes)
+            // Diagnostic: log incoming prototype info
+            Debug.Log($"[GameState] GrantPowers called for recipient={recipient?.team} sourceBody='{sourceBody?.Definition?.displayName}' prototypesLength={(prototypes==null?0:prototypes.Length)}");
+
+            // If prototypes appear to be missing/null (which can happen when the
+            // BodyInstance.Definition used at placement was a non-canonical copy),
+            // attempt to fetch canonical prototypes from the game's catalog by
+            // body type and use those instead.
+            Power[] usePrototypes = prototypes;
+            bool hasValid = false;
+            foreach (var p in prototypes)
             {
-                if (!proto) continue;
+                if (p != null) { hasValid = true; break; }
+            }
+
+            if (!hasValid && sourceBody != null && sourceBody.Definition != null)
+            {
+                try
+                {
+                    BodyDefinition canonical = null;
+                    if (this.catalog != null)
+                    {
+                        canonical = this.catalog.Get(sourceBody.Definition.type);
+                        Debug.Log($"[GameState] Catalog present. Lookup for type {sourceBody.Definition.type} returned canonical={(canonical!=null)}");
+                    }
+                    else
+                    {
+                        Debug.Log("[GameState] Catalog is null on GameState when attempting canonical lookup.");
+                    }
+                    if (canonical != null)
+                    {
+                        Debug.Log($"[GameState] Canonical definition '{canonical.displayName}' prototypes: placement={(canonical.placementPowers!=null?canonical.placementPowers.Length:0)} colonization={(canonical.colonizationPowers!=null?canonical.colonizationPowers.Length:0)}");
+                        // Prefer colonizationPowers if the call is from colonization flow
+                        if (canonical.colonizationPowers != null && canonical.colonizationPowers.Length > 0)
+                        {
+                            usePrototypes = canonical.colonizationPowers;
+                        }
+                        else if (canonical.placementPowers != null && canonical.placementPowers.Length > 0)
+                        {
+                            usePrototypes = canonical.placementPowers;
+                        }
+                    }
+                }
+                catch { /* defensive: if catalog lookup fails, continue with original prototypes */ }
+            }
+
+            // If the chosen prototype array doesn't actually contain any valid entries,
+            // attempt to fetch a runtime-built catalog (BodyFactory.BuildCatalog) and use
+            // its prototypes for this body type. This addresses cases where the
+            // serialized/inspector catalog exists but its prototype references are null.
+            bool useFallbackRuntimeCatalog = false;
+            if (!hasValid)
+            {
+                try
+                {
+                    var runtimeCat = BodyFactory.BuildCatalog();
+                    if (runtimeCat != null && sourceBody != null)
+                    {
+                        var runtimeCanonical = runtimeCat.Get(sourceBody.Definition.type);
+                        if (runtimeCanonical != null)
+                        {
+                            Power[] runtimeProtos = null;
+                            if (runtimeCanonical.colonizationPowers != null && runtimeCanonical.colonizationPowers.Length > 0)
+                                runtimeProtos = runtimeCanonical.colonizationPowers;
+                            else if (runtimeCanonical.placementPowers != null && runtimeCanonical.placementPowers.Length > 0)
+                                runtimeProtos = runtimeCanonical.placementPowers;
+
+                            if (runtimeProtos != null)
+                            {
+                                int validCount = 0;
+                                foreach (var p in runtimeProtos) if (p != null) validCount++;
+                                if (validCount > 0)
+                                {
+                                    usePrototypes = runtimeProtos;
+                                    hasValid = true;
+                                    useFallbackRuntimeCatalog = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { /* ignore runtime build failures */ }
+            }
+
+            Debug.Log($"[GameState] Using { (usePrototypes==null?0:usePrototypes.Length) } prototypes for granting (hasValid={hasValid}){(useFallbackRuntimeCatalog?" (runtime catalog fallback)":"") }.");
+
+            foreach (var proto in usePrototypes)
+            {
+                if (proto == null) continue;
 
                 var clone = Instantiate(proto);
                 clone.name = proto.name;
@@ -449,6 +716,8 @@ namespace DarkForest
 
                 var card = CreateCardForPower(granted, sourceBody);
                 recipient.hand.Add(card);
+
+                Debug.Log($"[GameState] Granted power '{(clone != null ? clone.powerName : "<null>")}' to {recipient.team} from '{(sourceBody?.Definition?.displayName ?? "<unknown>")}'. Added card '{card.title}'.");
             }
         }
 
@@ -498,6 +767,8 @@ namespace DarkForest
 
             owner.readyPowers.Add(granted);
             owner.hand.Add(CreateCardForPower(granted, sourceBody));
+            // Grant the false report token immediately upon placement (one token per Moon placement)
+            owner.falseReportTokens++;
         }
 
         void RevokeSolarDividend(PlayerState owner, BodyInstance body)
@@ -522,6 +793,22 @@ namespace DarkForest
                 sourceType = ResolveBodyType(sourceBody),
                 title = granted.power ? (!string.IsNullOrEmpty(granted.power.powerName) ? granted.power.powerName : sourceBody?.Definition?.displayName ?? "Power") : "Power",
                 description = granted.power ? granted.power.text : string.Empty
+            };
+
+            card.art = ResolveCardArt(card.sourceType);
+            return card;
+        }
+
+        // Create a simple PlayerCard representing the placed/colonized body itself (no granted power)
+        PlayerCard CreateCardForBody(BodyInstance sourceBody)
+        {
+            if (sourceBody == null) return null;
+            var card = new PlayerCard
+            {
+                grantedPower = null,
+                sourceType = ResolveBodyType(sourceBody),
+                title = sourceBody.Definition != null ? sourceBody.Definition.displayName : "Body",
+                description = sourceBody.Definition != null ? sourceBody.Definition.rulesSummary : string.Empty
             };
 
             card.art = ResolveCardArt(card.sourceType);

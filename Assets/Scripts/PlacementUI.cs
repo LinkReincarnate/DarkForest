@@ -11,6 +11,9 @@ namespace DarkForest
         public BoardRenderer probeView;
         public BoardRenderer hiddenView;
 
+        [Tooltip("Show the legacy left-side UI form. Disable to hide legacy UI and rely on RetroHUD (grids remain visible).")]
+        public bool showLegacyUI = false;
+
         public int layerForPlacement = 0;
         public int selectedIndex = 0;
         public BodyDefinition[] shop;
@@ -25,17 +28,28 @@ namespace DarkForest
         private PlayerState cachedTurnPlayer;
         private int probesTakenThisTurn;
 
+    // Expose probes taken for HUDs and other UI without using reflection
+    public int ProbesTakenThisTurn => probesTakenThisTurn;
+
+    // Expose whether the UI is currently in placement mode for the active player
+    public bool IsInPlacementMode => placingDuringTurn;
+
         void Start()
         {
             bootstrapper = FindObjectOfType<GameBootstrapper>();
+            // Prefer the game's catalog when available so the UI and game use the
+            // same BodyDefinition instances (ensures power prototypes are present).
             if (!catalog)
             {
-                catalog = BodyFactory.BuildCatalog();
+                catalog = (game != null && game.catalog != null) ? game.catalog : BodyFactory.BuildCatalog();
             }
 
             shop = catalog && catalog.entries != null ? catalog.entries.ToArray() : new BodyDefinition[0];
             EnsureRuntimeUpgrades();
             RefreshViews();
+
+            // Ensure the retro HUD exists and is wired (convenience for runtime).
+            RetroHUD.EnsureExists(this, game);
 
             if (game != null)
             {
@@ -237,6 +251,9 @@ namespace DarkForest
         {
             if (!game || game.players.Count == 0) return;
 
+            // If legacy UI is disabled, don't draw the left-side form (RetroHUD will provide UI)
+            if (!showLegacyUI) return;
+
             var active = game.Current;
             GUILayout.BeginArea(new Rect(10, 10, 380, 820), GUI.skin.box);
             GUILayout.Label($"Phase: {game.phase}");
@@ -346,6 +363,76 @@ namespace DarkForest
                 }
             }
             GUI.enabled = true;
+        }
+
+        // Small public helper so external HUDs can trigger an end-turn (keeps existing logic centralized)
+        public void EndTurnFromHUD()
+        {
+            var active = game?.Current;
+            if (active == null) return;
+
+            int probesPerTurn = GetProbesPerTurn(active);
+            probesTakenThisTurn = Mathf.Max(probesTakenThisTurn, probesPerTurn);
+            if (!TryAutoAdvanceAfterProbes())
+            {
+                RefreshViews();
+            }
+        }
+
+        // HUD wrapper: finish placement for the current player
+        public void FinishPlacementFromHUD()
+        {
+            awaitingTurnAdvance = false;
+            placingDuringTurn = false;
+            pendingCard = null;
+            game.CompletePlacementForCurrentPlayer();
+            RefreshViews();
+        }
+
+        // HUD wrapper: pass the device to next placement player
+        public void PassDeviceToNextFromHUD()
+        {
+            awaitingTurnAdvance = false;
+            placingDuringTurn = false;
+            pendingCard = null;
+            game.AdvanceToNextPlacementPlayer();
+            RefreshViews();
+        }
+
+        // HUD helper: returns true if the current player can afford at least one body in the shop
+        public bool CurrentPlayerCanAffordAny()
+        {
+            var active = game != null ? game.Current : null;
+            return active != null && HasAffordableBody(active);
+        }
+
+        // HUD helper: enter placement mode (if allowed)
+        public void EnterPlacementModeFromHUD()
+        {
+            var active = game != null ? game.Current : null;
+            if (active == null) return;
+
+            if (HasAffordableBody(active) && game.phase == GameState.GamePhase.Probing)
+            {
+                // Switch back to placement phase for this player only if the game rules allow it.
+                // For simplicity, allow the UI to toggle placingDuringTurn for the current player.
+                placingDuringTurn = true;
+                RefreshViews();
+            }
+        }
+
+        // HUD helper: exit placement mode and return to probing interactions
+        public void ExitPlacementFromHUD()
+        {
+            placingDuringTurn = false;
+            pendingCard = null;
+            RefreshViews();
+        }
+
+        // Allow external HUDs to resolve a pending probe decision (spend token or allow hit)
+        public void ResolvePendingProbeFromHUD(bool spendToken)
+        {
+            ResolvePendingProbe(spendToken);
         }
 
         void DrawLayerSelector()
@@ -588,6 +675,12 @@ namespace DarkForest
 
                 UpdatePlacementPreviewForCard(power);
 
+                // If a modal from the HUD is open, ignore mouse clicks so the modal can capture input
+                if (RetroHUD.AnyModalOpen)
+                {
+                    return;
+                }
+
                 if (Input.GetMouseButtonDown(0))
                 {
                     HandleCardClick(power);
@@ -596,7 +689,7 @@ namespace DarkForest
             }
 
             bool isPlacementPhase = game.phase == GameState.GamePhase.Placement;
-            if (isPlacementPhase)
+            if (isPlacementPhase || placingDuringTurn)
             {
                 UpdatePlacementPreviewCurrentBody();
             }
@@ -614,6 +707,9 @@ namespace DarkForest
                     return;
                 }
             }
+
+            // If a modal from the HUD is open, ignore mouse clicks so the modal can capture input
+            if (RetroHUD.AnyModalOpen) return;
 
             if (Input.GetMouseButtonDown(0))
             {
@@ -785,13 +881,47 @@ namespace DarkForest
             ExecutePendingCard(new Vector3Int(x, y, layerForPlacement));
         }
 
-        void StartCard(PlayerCard card)
+        public void StartCard(PlayerCard card)
         {
             hiddenView?.ClearPlacementPreview();
             probeView?.ClearPlacementPreview();
 
-            if (card == null || card.grantedPower == null || card.grantedPower.power == null) return;
-            if (!card.IsAvailable) return;
+            if (card == null)
+            {
+                Debug.LogWarning("[PlacementUI] StartCard called with null card.");
+                return;
+            }
+
+            if (card.grantedPower == null || card.grantedPower.power == null)
+            {
+                // Try to auto-link a matching GrantedPower from the current player's readyPowers
+                var owner = game?.Current;
+                if (owner != null && card != null)
+                {
+                    var match = owner.readyPowers.FirstOrDefault(gp => gp != null && gp.sourceBody != null && gp.power != null && (
+                        (gp.sourceBody.Definition != null && gp.sourceBody.Definition.displayName == card.title) ||
+                        (card.sourceType != BodyType.Spacejunk && gp.sourceBody.Definition != null && gp.sourceBody.Definition.type == card.sourceType)
+                    ));
+
+                    if (match != null)
+                    {
+                        card.grantedPower = match;
+                        Debug.Log($"[PlacementUI] Auto-linked card '{card.title}' to granted power '{match.power.powerName}' from body '{match.sourceBody?.Definition?.displayName}'.");
+                    }
+                }
+
+                if (card.grantedPower == null || card.grantedPower.power == null)
+                {
+                    Debug.LogWarning($"[PlacementUI] Card '{card.title}' is missing grantedPower or power. grantedPower={(card.grantedPower==null?"<null>":"present")}, power={(card.grantedPower!=null && card.grantedPower.power==null?"<null>":"present")}.");
+                    return;
+                }
+            }
+
+            if (!card.IsAvailable)
+            {
+                Debug.LogWarning($"[PlacementUI] Card '{card.title}' is not available (IsAvailable=false).");
+                return;
+            }
 
             pendingCard = card;
             if (!card.grantedPower.power.RequiresTargetCell)
@@ -802,6 +932,14 @@ namespace DarkForest
             {
                 RefreshViews();
             }
+        }
+
+        // Allow external HUDs to select a shop entry (updates selectedIndex and refreshes views)
+        public void SelectShopIndex(int idx)
+        {
+            if (shop == null || shop.Length == 0) return;
+            selectedIndex = Mathf.Clamp(idx, 0, shop.Length - 1);
+            RefreshViews();
         }
 
         void ExecutePendingCard(Vector3Int probe)
@@ -882,12 +1020,52 @@ namespace DarkForest
 
             if (me.hiddenBoard.CanPlace(def.shape, ox, oy, oz))
             {
-                var inst = me.hiddenBoard.Place(def, me.team, ox, oy, oz);
+                // Use the canonical definition from the game's catalog when possible.
+                // This guarantees the BodyInstance.Definition carries the serialized
+                // power prototypes so GrantPowers receives valid prototypes.
+                var defToPlace = def;
+                if (game != null && game.catalog != null)
+                {
+                    var canonical = game.catalog.Get(def.type);
+                    if (canonical != null) defToPlace = canonical;
+                }
+
+                var inst = me.hiddenBoard.Place(defToPlace, me.team, ox, oy, oz);
                 me.bodies.Add(inst);
                 me.currency -= def.price;
                 Debug.Log($"{me.team} placed {def.displayName} for ${def.price}.");
 
                 game.HandlePlacement(me, inst);
+
+                // If the placed body grants a False Report power (e.g., Moon), show a HUD modal informing the player
+                if (inst != null && inst.Definition != null && inst.Definition.type == BodyType.Moon)
+                {
+                    var hud = Object.FindObjectOfType<RetroHUD>();
+                    if (hud != null)
+                    {
+                        hud.ShowTransient("FALSE REPORT AVAILABLE", "This Moon granted a False Report power. You have received a False Report card in your hand.", 6f);
+                    }
+                }
+                // If the placed body is a Planet or Space Station, add a card for it to the player's hand (visual/representation)
+                if (inst != null && inst.Definition != null && (inst.Definition.type == BodyType.Planet || inst.Definition.type == BodyType.SpaceStation))
+                {
+                    try
+                    {
+                        var card = new PlayerCard
+                        {
+                            grantedPower = null,
+                            art = (game != null && game.cardArtCatalog != null) ? game.cardArtCatalog.GetSprite(inst.Definition.type) : null,
+                            sourceType = inst.Definition.type,
+                            title = inst.Definition.displayName,
+                            description = inst.Definition.rulesSummary
+                        };
+                        me.hand.Add(card);
+                    }
+                    catch
+                    {
+                        // Non-fatal: if PlayerCard type isn't accessible here for any reason, skip adding.
+                    }
+                }
 
                 if (!HasAffordableBody(me))
                 {
@@ -1062,6 +1240,12 @@ namespace DarkForest
             EnsureRuntimeUpgrades();
             RefreshViews();
             bootstrapper?.RefreshRenderers();
+        }
+
+        // Public wrapper so HUD can restart the current configuration
+        public void RestartGameFromHUD()
+        {
+            RestartGame();
         }
 
         void SetLayer(int newLayer)
