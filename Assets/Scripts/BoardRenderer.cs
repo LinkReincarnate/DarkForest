@@ -212,7 +212,8 @@ namespace DarkForest
             return cellRenderers != null && x >= 0 && y >= 0 && x < cellRenderers.GetLength(0) && y < cellRenderers.GetLength(1);
         }
 
-        public void ShowPlacementPreview(BodyDefinition definition, int ox, int oy)
+        // rotation: 0..3 clockwise 90-degree steps
+        public void ShowPlacementPreview(BodyDefinition definition, int ox, int oy, int rotation = 0)
         {
             ClearPlacementPreview();
             if (definition == null || definition.shape == null || cachedCells == null)
@@ -223,8 +224,16 @@ namespace DarkForest
             bool fits = true;
             foreach (var offset in definition.shape.points)
             {
-                int cx = ox + offset.x;
-                int cy = oy + offset.y;
+                int rx = offset.x;
+                int ry = offset.y;
+                switch (rotation & 3)
+                {
+                    case 1: rx = -offset.y; ry = offset.x; break;
+                    case 2: rx = -offset.x; ry = -offset.y; break;
+                    case 3: rx = offset.y; ry = -offset.x; break;
+                }
+                int cx = ox + rx;
+                int cy = oy + ry;
                 if (!IsWithinBoard(cx, cy) || cellBlocked[cx, cy])
                 {
                     fits = false;
@@ -236,8 +245,16 @@ namespace DarkForest
 
             foreach (var offset in definition.shape.points)
             {
-                int cx = ox + offset.x;
-                int cy = oy + offset.y;
+                int rx = offset.x;
+                int ry = offset.y;
+                switch (rotation & 3)
+                {
+                    case 1: rx = -offset.y; ry = offset.x; break;
+                    case 2: rx = -offset.x; ry = -offset.y; break;
+                    case 3: rx = offset.y; ry = -offset.x; break;
+                }
+                int cx = ox + rx;
+                int cy = oy + ry;
                 HighlightPreviewCell(cx, cy, previewColor);
             }
         }

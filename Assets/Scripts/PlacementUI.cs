@@ -22,6 +22,8 @@ namespace DarkForest
         private Vector2 handScroll;
         private bool awaitingTurnAdvance;
         private bool placingDuringTurn;
+    // Rotation index for placement preview and placement (0..3, 90deg clockwise steps)
+    private int placementRotation = 0;
         private bool awaitingDefenderDecision;
         private GameBootstrapper bootstrapper;
         private PlayerCard pendingCard;
@@ -329,6 +331,20 @@ namespace DarkForest
                 game.CompletePlacementForCurrentPlayer();
                 RefreshViews();
             }
+
+            // Legacy UI rotate controls
+            GUILayout.BeginHorizontal();
+            GUI.enabled = !awaitingDefenderDecision;
+            if (GUILayout.Button("Rotate ⟲", GUILayout.Width(100)))
+            {
+                RotatePlacementCounterClockwise();
+            }
+            if (GUILayout.Button("Rotate ⟳", GUILayout.Width(100)))
+            {
+                RotatePlacementClockwise();
+            }
+            GUI.enabled = true;
+            GUILayout.EndHorizontal();
 
             if (!awaitingDefenderDecision && GUILayout.Button("Pass Device To Next Player"))
             {
@@ -698,6 +714,25 @@ namespace DarkForest
                 hiddenView?.ClearPlacementPreview();
             }
 
+            // Keyboard shortcuts for rotation (only when placement interactions are allowed)
+            bool placementInteraction = (isPlacementPhase || placingDuringTurn) && !awaitingDefenderDecision && !RetroHUD.AnyModalOpen;
+            if (placementInteraction)
+            {
+                if (Input.GetKeyDown(KeyCode.Q))
+                {
+                    RotatePlacementCounterClockwise();
+                }
+                if (Input.GetKeyDown(KeyCode.E))
+                {
+                    RotatePlacementClockwise();
+                }
+                if (Input.GetKeyDown(KeyCode.R))
+                {
+                    // reset rotation to 0
+                    while (RotationIndex != 0) RotatePlacementClockwise();
+                }
+            }
+
             if (awaitingTurnAdvance && !isPlacementPhase)
             {
                 var active = game.Current;
@@ -782,7 +817,7 @@ namespace DarkForest
                 var body = GetSelectedBody();
                 if (body != null)
                 {
-                    hiddenView.ShowPlacementPreview(body, x, y);
+                    hiddenView.ShowPlacementPreview(body, x, y, placementRotation);
                 }
                 else
                 {
@@ -1018,7 +1053,7 @@ namespace DarkForest
                 return;
             }
 
-            if (me.hiddenBoard.CanPlace(def.shape, ox, oy, oz))
+            if (me.hiddenBoard.CanPlace(def.shape, ox, oy, oz, placementRotation))
             {
                 // Use the canonical definition from the game's catalog when possible.
                 // This guarantees the BodyInstance.Definition carries the serialized
@@ -1030,7 +1065,7 @@ namespace DarkForest
                     if (canonical != null) defToPlace = canonical;
                 }
 
-                var inst = me.hiddenBoard.Place(defToPlace, me.team, ox, oy, oz);
+                var inst = me.hiddenBoard.Place(defToPlace, me.team, ox, oy, oz, placementRotation);
                 me.bodies.Add(inst);
                 me.currency -= def.price;
                 Debug.Log($"{me.team} placed {def.displayName} for ${def.price}.");
@@ -1075,10 +1110,27 @@ namespace DarkForest
             }
             else
             {
-                hiddenView?.ShowPlacementPreview(def, ox, oy);
+                hiddenView?.ShowPlacementPreview(def, ox, oy, placementRotation);
                 Debug.Log("Cannot place here: blocked, out of bounds, or probed.");
             }
         }
+
+        // Rotate placement preview clockwise by 90 degrees
+        public void RotatePlacementClockwise()
+        {
+            placementRotation = (placementRotation + 1) & 3;
+            RefreshViews();
+        }
+
+        // Rotate placement preview counter-clockwise by 90 degrees
+        public void RotatePlacementCounterClockwise()
+        {
+            placementRotation = (placementRotation + 3) & 3;
+            RefreshViews();
+        }
+
+        // Public rotation index (0..3)
+        public int RotationIndex => placementRotation;
 
         void LaunchProbe(int x, int y, int z)
         {
@@ -1362,7 +1414,7 @@ namespace DarkForest
 
                 if (!DysonPlacementEncirclesStar(player, ox, oy, oz))
                 {
-                    hiddenView?.ShowPlacementPreview(def, ox, oy);
+                    hiddenView?.ShowPlacementPreview(def, ox, oy, placementRotation);
                     Debug.Log("Dyson Sphere must be placed to encircle one of your Stars.");
                     return false;
                 }

@@ -67,12 +67,44 @@ namespace DarkForest
             return true;
         }
 
-        public BodyInstance Place(BodyDefinition def, Team owner, int ox, int oy, int oz)
+        // Rotation is a 90-degree step count (0..3). Rotates shape points clockwise by 90*rotation degrees.
+        public bool CanPlace(BodyShape shape, int ox, int oy, int oz, int rotation)
+        {
+            foreach (var p in shape.points)
+            {
+                int rx = p.x;
+                int ry = p.y;
+                switch (rotation & 3)
+                {
+                    case 1: rx = -p.y; ry = p.x; break; // 90
+                    case 2: rx = -p.x; ry = -p.y; break; // 180
+                    case 3: rx = p.y; ry = -p.x; break; // 270
+                }
+                int x = ox + rx;
+                int y = oy + ry;
+                int z = oz + p.z;
+                var c = Get(x, y, z);
+                if (c == null || c.occupant != null) return false;
+                if (c.probed) return false;
+            }
+            return true;
+        }
+
+        // rotation: 0..3 clockwise 90-degree steps
+        public BodyInstance Place(BodyDefinition def, Team owner, int ox, int oy, int oz, int rotation = 0)
         {
             var inst = new BodyInstance(def, owner);
             foreach (var p in def.shape.points)
             {
-                var c = Get(ox + p.x, oy + p.y, oz + p.z);
+                int rx = p.x;
+                int ry = p.y;
+                switch (rotation & 3)
+                {
+                    case 1: rx = -p.y; ry = p.x; break; // 90
+                    case 2: rx = -p.x; ry = -p.y; break; // 180
+                    case 3: rx = p.y; ry = -p.x; break; // 270
+                }
+                var c = Get(ox + rx, oy + ry, oz + p.z);
                 if (c == null) throw new Exception("Out of bounds");
                 c.occupant = inst;
                 inst.OccupiedCells.Add(c);

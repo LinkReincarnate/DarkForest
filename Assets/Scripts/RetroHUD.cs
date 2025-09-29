@@ -21,9 +21,11 @@ namespace DarkForest
         GUIStyle buttonStyle;
         GUIStyle smallLabelStyle;
         // Card sizing used by shop and hand layouts
-        public float cardW = 120f;
-        public float cardH = 80f;
-    bool hasDrawnOnce = false;
+        public float shopCardWidth = 120f;
+        public float shopCardHeight = 80f;
+        public float handCardWidth = 180f;
+        public float handCardHeight = 240f;
+        bool hasDrawnOnce = false;
     Vector2 shopScrollPos = Vector2.zero;
     Vector2 handScrollPos = Vector2.zero;
         // Simple transient modal fields (private; use ShowTransient to display)
@@ -110,7 +112,7 @@ namespace DarkForest
             Debug.Log("RetroHUD: Auto-created RetroHUD GameObject and wired references.");
         }
 
-    void OnGUI()
+        void OnGUI()
         {
             // Draw on top
             GUI.depth = -1000;
@@ -211,6 +213,17 @@ namespace DarkForest
                     }
                 }
             }
+            // Keyboard shortcut hint for rotation (use Q/E to rotate, R to reset)
+            GUILayout.Space(6f);
+            if (placementUI != null && placementUI.IsInPlacementMode)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Rotate with Q/E (reset: R)", smallLabelStyle, GUILayout.Width(240));
+                int rot = placementUI.RotationIndex;
+                string rotLabel = rot == 0 ? "0°" : rot == 1 ? "90°" : rot == 2 ? "180°" : "270°";
+                GUILayout.Label($"Rotation: {rotLabel}", smallLabelStyle, GUILayout.Width(120));
+                GUILayout.EndHorizontal();
+            }
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
             GUILayout.EndArea();
@@ -254,74 +267,138 @@ namespace DarkForest
                 }
             }
 
-            // Right-side Shop panel
-            int shopW = 300;
-            int shopH = Mathf.Clamp(Screen.height - 40, 200, Screen.height - 40);
-            Rect shopRect = new Rect(Screen.width - shopW - 10, 10, shopW, shopH);
-            GUI.Box(shopRect, "", panelStyle);
-            GUILayout.BeginArea(shopRect);
+            var player = active;
+
+            // Left-side hand panel
+            int leftColumnWidth = 340;
+            float leftPadding = 10f;
+            float leftTop = statusRect.yMax + 10f;
+            float leftColumnHeight = Mathf.Max(0f, Screen.height - leftTop - 10f);
+
+            if (leftColumnHeight > 0f)
+            {
+                Rect leftRect = new Rect(leftPadding, leftTop, leftColumnWidth, leftColumnHeight);
+                GUI.Box(leftRect, "", panelStyle);
+                GUILayout.BeginArea(leftRect);
+                GUILayout.BeginVertical();
+                GUILayout.Label("HAND", titleStyle);
+                GUILayout.Space(6f);
+
+                if (player != null && player.hand != null && player.hand.Count > 0)
+                {
+                    float handHeight = Mathf.Max(180f, leftColumnHeight - 30f);
+                    handScrollPos = GUILayout.BeginScrollView(handScrollPos, GUILayout.Height(handHeight));
+                    GUILayout.BeginHorizontal();
+                    int handCount = player.hand.Count;
+                    for (int i = 0; i < handCount; i++)
+                    {
+                        var card = player.hand[i];
+                        if (card == null) continue;
+
+                        GUILayout.BeginVertical(GUILayout.Width(handCardWidth + 24f));
+                        if (card.art != null)
+                        {
+                            var content = new GUIContent(card.art.texture, card.description);
+                            if (GUILayout.Button(content, GUILayout.Width(handCardWidth), GUILayout.Height(handCardHeight)))
+                            {
+                                placementUI.StartCard(card);
+                            }
+                        }
+                        else
+                        {
+                            if (GUILayout.Button(card.title, GUILayout.Width(handCardWidth), GUILayout.Height(handCardHeight * 0.5f)))
+                            {
+                                placementUI.StartCard(card);
+                            }
+                        }
+                        GUILayout.Space(4f);
+                        GUILayout.Label(card.title, smallLabelStyle, GUILayout.Width(handCardWidth));
+                        GUILayout.EndVertical();
+                        GUILayout.Space(10f);
+                    }
+                    GUILayout.EndHorizontal();
+                    GUILayout.EndScrollView();
+                }
+                else
+                {
+                    GUILayout.Label("No cards available", smallLabelStyle);
+                }
+
+                GUILayout.EndVertical();
+                GUILayout.EndArea();
+            }
+
+            // Right-side store panel
+            int rightColumnWidth = 340;
+            float rightPadding = 10f;
+            float rightColumnHeight = Screen.height - 20f;
+            float storeMin = 220f;
+            float storeHeight = Mathf.Max(storeMin, rightColumnHeight - 20f);
+
+            Rect rightRect = new Rect(Screen.width - rightColumnWidth - rightPadding, 10f, rightColumnWidth, rightColumnHeight);
+            GUI.Box(rightRect, "", panelStyle);
+            GUILayout.BeginArea(rightRect);
             GUILayout.BeginVertical();
             GUILayout.Label("STORE", titleStyle);
-            GUILayout.Space(6);
-            var player = game.Current;
+            GUILayout.Space(6f);
             if (placementUI != null && placementUI.shop != null && placementUI.shop.Length > 0)
             {
-                    int count = placementUI.shop.Length;
-                    int cols = 2;
-                    int rows = Mathf.CeilToInt(count / (float)cols);
+                int count = placementUI.shop.Length;
+                int cols = 2;
+                int rows = Mathf.CeilToInt(count / (float)cols);
 
-                    shopScrollPos = GUILayout.BeginScrollView(shopScrollPos);
-                    for (int r = 0; r < rows; r++)
+                shopScrollPos = GUILayout.BeginScrollView(shopScrollPos, GUILayout.Height(storeHeight));
+                for (int r = 0; r < rows; r++)
+                {
+                    GUILayout.BeginHorizontal();
+                    for (int c = 0; c < cols; c++)
                     {
-                        GUILayout.BeginHorizontal();
-                        for (int c = 0; c < cols; c++)
+                        int i = r * cols + c;
+                        if (i >= count) break;
+                        var def = placementUI.shop[i];
+                        if (def == null) continue;
+
+                        bool affordable = player != null && player.currency >= def.price;
+                        GUI.enabled = affordable && !game.gameOver;
+
+                        Texture img = null;
+                        if (game != null && game.cardArtCatalog != null)
                         {
-                            int i = r * cols + c;
-                            if (i >= count) break;
-                            var def = placementUI.shop[i];
-                            if (def == null) continue;
-
-                            bool affordable = player != null && player.currency >= def.price;
-                            GUI.enabled = affordable && !game.gameOver;
-
-                            // Try to get a card sprite from the game's cardArtCatalog using the body type
-                            Texture img = null;
-                            if (game != null && game.cardArtCatalog != null)
-                            {
-                                var spr = game.cardArtCatalog.GetSprite(def.type);
-                                if (spr != null) img = spr.texture;
-                            }
-
-                            GUILayout.BeginVertical(GUILayout.Width(cardW));
-                            if (img != null)
-                            {
-                                var content = new GUIContent(img, def.displayName + " - $" + def.price);
-                                if (GUILayout.Button(content, GUILayout.Width(cardW), GUILayout.Height(cardH)))
-                                {
-                                    placementUI.SelectShopIndex(i);
-                                }
-                            }
-                            else
-                            {
-                                if (GUILayout.Button(def.displayName, GUILayout.Width(cardW), GUILayout.Height(40)))
-                                {
-                                    placementUI.SelectShopIndex(i);
-                                }
-                            }
-
-                            GUILayout.Label($"${def.price}" + (placementUI.selectedIndex == i ? "   (selected)" : ""), smallLabelStyle);
-                            GUILayout.EndVertical();
-                            GUILayout.Space(8f);
-                            GUI.enabled = true;
+                            var spr = game.cardArtCatalog.GetSprite(def.type);
+                            if (spr != null) img = spr.texture;
                         }
-                        GUILayout.EndHorizontal();
+
+                        GUILayout.BeginVertical(GUILayout.Width(shopCardWidth));
+                        if (img != null)
+                        {
+                            var content = new GUIContent(img, def.displayName + " - $" + def.price);
+                            if (GUILayout.Button(content, GUILayout.Width(shopCardWidth), GUILayout.Height(shopCardHeight)))
+                            {
+                                placementUI.SelectShopIndex(i);
+                            }
+                        }
+                        else
+                        {
+                            if (GUILayout.Button(def.displayName, GUILayout.Width(shopCardWidth), GUILayout.Height(40)))
+                            {
+                                placementUI.SelectShopIndex(i);
+                            }
+                        }
+
+                        GUILayout.Label("$" + def.price + (placementUI.selectedIndex == i ? "   (selected)" : string.Empty), smallLabelStyle);
+                        GUILayout.EndVertical();
+                        GUILayout.Space(8f);
+                        GUI.enabled = true;
                     }
-                    GUILayout.EndScrollView();
+                    GUILayout.EndHorizontal();
+                }
+                GUILayout.EndScrollView();
             }
             else
             {
                 GUILayout.Label("No bodies available", smallLabelStyle);
             }
+
             GUILayout.EndVertical();
             GUILayout.EndArea();
 
@@ -376,59 +453,6 @@ namespace DarkForest
                 GUILayout.EndVertical();
                 GUILayout.EndArea();
             }
-
-            // Bottom Hand panel
-            int handH = 160;
-            Rect handRect = new Rect(10, Screen.height - handH - 10, Screen.width - shopW - 40, handH);
-            GUI.Box(handRect, "", panelStyle);
-            GUILayout.BeginArea(handRect);
-            GUILayout.BeginVertical();
-            GUILayout.Label("HAND", titleStyle);
-            GUILayout.Space(6);
-            if (player != null && player.hand != null && player.hand.Count > 0)
-            {
-                int count = player.hand.Count;
-
-                // Horizontal scroll row: lay out cards left-to-right
-                GUILayout.BeginHorizontal();
-                handScrollPos = GUILayout.BeginScrollView(handScrollPos, GUILayout.Height(cardH + 40f));
-                GUILayout.BeginHorizontal();
-                for (int i = 0; i < count; i++)
-                {
-                    var card = player.hand[i];
-                    if (card == null) continue;
-
-                    GUILayout.BeginVertical(GUILayout.Width(cardW + 20f));
-                    if (card.art != null)
-                    {
-                        var content = new GUIContent(card.art.texture, card.description);
-                        if (GUILayout.Button(content, GUILayout.Width(cardW), GUILayout.Height(cardH)))
-                        {
-                            placementUI.StartCard(card);
-                        }
-
-                    }
-                    else
-                    {
-                        if (GUILayout.Button(card.title, GUILayout.Width(cardW), GUILayout.Height(cardH * 0.5f)))
-                        {
-                            placementUI.StartCard(card);
-                        }
-                    }
-                    GUILayout.Label(card.title, smallLabelStyle, GUILayout.Width(cardW));
-                    GUILayout.EndVertical();
-                    GUILayout.Space(6f);
-                }
-                GUILayout.EndHorizontal();
-                GUILayout.EndScrollView();
-                GUILayout.EndHorizontal();
-            }
-            else
-            {
-                GUILayout.Label("No cards available", smallLabelStyle);
-            }
-            GUILayout.EndVertical();
-            GUILayout.EndArea();
         }
 
         // Public-facing property: any modal is visible (transient info or pending defender decision)
