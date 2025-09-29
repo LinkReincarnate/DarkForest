@@ -119,6 +119,58 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &208724749
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 208724751}
+  - component: {fileID: 208724750}
+  m_Layer: 0
+  m_Name: RetroHUD
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &208724750
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 208724749}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7873009f1bec868439bf06f815cf7480, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  placementUI: {fileID: 1254373893}
+  game: {fileID: 639948761}
+  retroFont: {fileID: 0}
+  panelColor: {r: 0.02, g: 0.06, b: 0.12, a: 0.9}
+  accentColor: {r: 0.9, g: 0.6, b: 0.2, a: 1}
+  textColor: {r: 0.95, g: 0.95, b: 0.9, a: 1}
+  cardW: 120
+  cardH: 80
+--- !u!4 &208724751
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 208724749}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &639948760
 GameObject:
   m_ObjectHideFlags: 0
@@ -156,6 +208,7 @@ MonoBehaviour:
   depth: 1
   currentIndex: 0
   phase: 0
+  postProbeDelay: 1
   gameOver: 0
 --- !u!4 &639948762
 Transform:
@@ -637,3 +690,4 @@ SceneRoots:
   - {fileID: 797809840}
   - {fileID: 813337670}
   - {fileID: 1254373894}
+  - {fileID: 208724751}
