@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
@@ -8,8 +9,26 @@ namespace DarkForest
         public GameState game;
         public GameConfig config;
         public BodyCatalog catalog;
+
+        [Header("Legacy single toggle views (fallback)")]
         public BoardRenderer probeView;
         public BoardRenderer hiddenView;
+
+        [System.Serializable]
+        public class PlayerBoardView
+        {
+            public Team team = Team.PlayerA;
+            public BoardRenderer hiddenView;
+            public BoardRenderer probeView;
+        }
+
+        [Header("Per-player board views (optional multi-grid)")]
+        public PlayerBoardView[] playerBoardViews = new PlayerBoardView[0];
+
+        [Header("Camera Switching")]
+        public bool autoSwitchCameras = false;
+        public Camera mainCamera;
+        public Camera playerBCamera;
 
         [Tooltip("Show the legacy left-side UI form. Disable to hide legacy UI and rely on RetroHUD (grids remain visible).")]
         public bool showLegacyUI = false;
@@ -29,6 +48,9 @@ namespace DarkForest
         private PlayerCard pendingCard;
         private PlayerState cachedTurnPlayer;
         private int probesTakenThisTurn;
+        private Camera currentInputCamera;
+        private BoardRenderer activeHiddenView;
+        private BoardRenderer activeProbeView;
 
     // Expose probes taken for HUDs and other UI without using reflection
     public int ProbesTakenThisTurn => probesTakenThisTurn;
@@ -659,7 +681,13 @@ namespace DarkForest
 
         void Update()
         {
-            if (!game || game.players.Count == 0 || !Camera.main || game.gameOver)
+            if (!game || game.players.Count == 0 || game.gameOver)
+            {
+                return;
+            }
+
+            var inputCamera = GetInputCamera();
+            if (inputCamera == null)
             {
                 return;
             }
@@ -668,8 +696,7 @@ namespace DarkForest
 
             if (awaitingDefenderDecision)
             {
-                hiddenView?.ClearPlacementPreview();
-                probeView?.ClearPlacementPreview();
+                ClearAllPlacementPreviews();
                 return;
             }
 
@@ -711,7 +738,7 @@ namespace DarkForest
             }
             else
             {
-                hiddenView?.ClearPlacementPreview();
+                GetActiveHiddenView()?.ClearPlacementPreview();
             }
 
             // Keyboard shortcuts for rotation (only when placement interactions are allowed)
@@ -748,7 +775,7 @@ namespace DarkForest
 
             if (Input.GetMouseButtonDown(0))
             {
-                var activeView = (isPlacementPhase || placingDuringTurn) ? hiddenView : probeView;
+                var activeView = (isPlacementPhase || placingDuringTurn) ? GetActiveHiddenView() : GetActiveProbeView();
                 if (TryGetBoardCoordinates(activeView, out int ox, out int oy))
                 {
                     if (isPlacementPhase || placingDuringTurn)
@@ -778,12 +805,12 @@ namespace DarkForest
             }
             else if (power != null && power.RequiresTargetCell)
             {
-                hoverView = power.timing == PowerTiming.OffensiveFaceUp ? probeView : hiddenView;
+                hoverView = power.timing == PowerTiming.OffensiveFaceUp ? GetActiveProbeView() : GetActiveHiddenView();
             }
             else
             {
                 bool isPlacementPhase = game.phase == GameState.GamePhase.Placement;
-                hoverView = (isPlacementPhase || placingDuringTurn) ? hiddenView : probeView;
+                hoverView = (isPlacementPhase || placingDuringTurn) ? GetActiveHiddenView() : GetActiveProbeView();
             }
 
             if (hoverView != null && TryGetBoardCoordinates(hoverView, out int hx, out int hy))
@@ -795,54 +822,52 @@ namespace DarkForest
                 hoverView?.SetHover(null, null);
             }
 
-            if (hoverView != hiddenView && hiddenView != null)
-            {
-                hiddenView.SetHover(null, null);
-            }
-            if (hoverView != probeView && probeView != null)
-            {
-                probeView.SetHover(null, null);
-            }
+            ResetHoversExcept(hoverView);
         }
 
         void UpdatePlacementPreviewCurrentBody()
         {
-            if (hiddenView == null)
+            var placementView = GetActiveHiddenView();
+            if (placementView == null)
             {
                 return;
             }
 
-            if (TryGetBoardCoordinates(hiddenView, out int x, out int y))
+            if (TryGetBoardCoordinates(placementView, out int x, out int y))
             {
                 var body = GetSelectedBody();
                 if (body != null)
                 {
-                    hiddenView.ShowPlacementPreview(body, x, y, placementRotation);
+                    placementView.ShowPlacementPreview(body, x, y, placementRotation);
                 }
                 else
                 {
-                    hiddenView.ClearPlacementPreview();
+                    placementView.ClearPlacementPreview();
                 }
             }
             else
             {
-                hiddenView.ClearPlacementPreview();
+                placementView.ClearPlacementPreview();
             }
         }
 
         void UpdatePlacementPreviewForCard(Power power)
         {
-            hiddenView?.ClearPlacementPreview();
-            probeView?.ClearPlacementPreview();
+            ClearAllPlacementPreviews();
 
             if (power == null)
             {
                 return;
             }
 
+            var targetView = power.timing == PowerTiming.OffensiveFaceUp ? GetActiveProbeView() : GetActiveHiddenView();
+            if (targetView == null)
+            {
+                return;
+            }
+
             if (power is ScanRowPower)
             {
-                var targetView = power.timing == PowerTiming.OffensiveFaceUp ? probeView : hiddenView;
                 if (TryGetBoardCoordinates(targetView, out int x, out int y))
                 {
                     targetView.ShowRowPreview(y);
@@ -850,7 +875,6 @@ namespace DarkForest
             }
             else if (power is ScanColumnPower columnPower)
             {
-                var targetView = power.timing == PowerTiming.OffensiveFaceUp ? probeView : hiddenView;
                 if (TryGetBoardCoordinates(targetView, out int x, out int y))
                 {
                     if (columnPower.halfRange)
@@ -885,13 +909,192 @@ namespace DarkForest
             return game != null && player != null ? game.GetProbesPerTurn(player) : 1;
         }
 
+        PlayerState FindPlayerByTeam(Team team)
+        {
+            if (!game || game.players == null) return null;
+            foreach (var player in game.players)
+            {
+                if (player != null && player.team == team)
+                {
+                    return player;
+                }
+            }
+            return null;
+        }
+
+        BoardRenderer GetActiveHiddenView()
+        {
+            return activeHiddenView != null ? activeHiddenView : hiddenView;
+        }
+
+        BoardRenderer GetActiveProbeView()
+        {
+            return activeProbeView != null ? activeProbeView : probeView;
+        }
+
+        IEnumerable<BoardRenderer> EnumerateHiddenRenderers()
+        {
+            var seen = new HashSet<BoardRenderer>();
+            if (playerBoardViews != null)
+            {
+                foreach (var set in playerBoardViews)
+                {
+                    if (set != null && set.hiddenView && seen.Add(set.hiddenView))
+                    {
+                        yield return set.hiddenView;
+                    }
+                }
+            }
+            if (hiddenView && seen.Add(hiddenView))
+            {
+                yield return hiddenView;
+            }
+        }
+
+        IEnumerable<BoardRenderer> EnumerateProbeRenderers()
+        {
+            var seen = new HashSet<BoardRenderer>();
+            if (playerBoardViews != null)
+            {
+                foreach (var set in playerBoardViews)
+                {
+                    if (set != null && set.probeView && seen.Add(set.probeView))
+                    {
+                        yield return set.probeView;
+                    }
+                }
+            }
+            if (probeView && seen.Add(probeView))
+            {
+                yield return probeView;
+            }
+        }
+
+        IEnumerable<BoardRenderer> EnumerateAllRenderers()
+        {
+            var seen = new HashSet<BoardRenderer>();
+            foreach (var renderer in EnumerateHiddenRenderers())
+            {
+                if (renderer && seen.Add(renderer))
+                {
+                    yield return renderer;
+                }
+            }
+            foreach (var renderer in EnumerateProbeRenderers())
+            {
+                if (renderer && seen.Add(renderer))
+                {
+                    yield return renderer;
+                }
+            }
+        }
+
+        void ClearPlacementPreviews(IEnumerable<BoardRenderer> renderers)
+        {
+            if (renderers == null) return;
+            foreach (var renderer in renderers)
+            {
+                if (renderer != null)
+                {
+                    renderer.ClearPlacementPreview();
+                }
+            }
+        }
+
+        void ClearAllPlacementPreviews()
+        {
+            ClearPlacementPreviews(EnumerateHiddenRenderers());
+            ClearPlacementPreviews(EnumerateProbeRenderers());
+        }
+
+        void ResetHoversExcept(BoardRenderer keep)
+        {
+            foreach (var renderer in EnumerateAllRenderers())
+            {
+                if (renderer == null || renderer == keep) continue;
+                renderer.SetHover(null, null);
+            }
+        }
+
+        Camera GetInputCamera()
+        {
+            if (currentInputCamera && currentInputCamera.gameObject.activeInHierarchy)
+            {
+                return currentInputCamera;
+            }
+
+            if (autoSwitchCameras)
+            {
+                if (playerBCamera && playerBCamera.gameObject.activeInHierarchy)
+                {
+                    return playerBCamera;
+                }
+
+                if (mainCamera && mainCamera.gameObject.activeInHierarchy)
+                {
+                    return mainCamera;
+                }
+            }
+
+            return Camera.main;
+        }
+
+        void UpdateActiveCamera(PlayerState active)
+        {
+            if (!autoSwitchCameras)
+            {
+                currentInputCamera = mainCamera ? mainCamera : (playerBCamera ? playerBCamera : Camera.main);
+                return;
+            }
+
+            Camera target = null;
+            if (active != null && playerBCamera != null && active.team == Team.PlayerB)
+            {
+                target = playerBCamera;
+            }
+            else if (mainCamera != null)
+            {
+                target = mainCamera;
+            }
+            else if (playerBCamera != null)
+            {
+                target = playerBCamera;
+            }
+
+            if (target != null)
+            {
+                SetCameraActive(mainCamera, target == mainCamera);
+                SetCameraActive(playerBCamera, target == playerBCamera);
+            }
+
+            currentInputCamera = target != null ? target : Camera.main;
+
+            if (currentInputCamera != null && !currentInputCamera.gameObject.activeInHierarchy)
+            {
+                currentInputCamera.gameObject.SetActive(true);
+            }
+        }
+
+        void SetCameraActive(Camera cam, bool shouldBeActive)
+        {
+            if (!cam) return;
+            var go = cam.gameObject;
+            if (go.activeSelf != shouldBeActive)
+            {
+                go.SetActive(shouldBeActive);
+            }
+        }
+
         bool TryGetBoardCoordinates(BoardRenderer view, out int x, out int y)
         {
             x = 0;
             y = 0;
             if (!view) return false;
 
-            var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            var camera = GetInputCamera();
+            if (camera == null) return false;
+
+            var ray = camera.ScreenPointToRay(Input.mousePosition);
             if (!Physics.Raycast(ray, out RaycastHit hit)) return false;
 
             var hitTransform = hit.collider ? hit.collider.transform : hit.transform;
@@ -910,7 +1113,8 @@ namespace DarkForest
         {
             if (pendingCard == null || power == null) return;
 
-            BoardRenderer targetView = power.timing == PowerTiming.OffensiveFaceUp ? probeView : hiddenView;
+            var targetView = power.timing == PowerTiming.OffensiveFaceUp ? GetActiveProbeView() : GetActiveHiddenView();
+            if (targetView == null) return;
             if (!TryGetBoardCoordinates(targetView, out int x, out int y)) return;
 
             ExecutePendingCard(new Vector3Int(x, y, layerForPlacement));
@@ -918,8 +1122,7 @@ namespace DarkForest
 
         public void StartCard(PlayerCard card)
         {
-            hiddenView?.ClearPlacementPreview();
-            probeView?.ClearPlacementPreview();
+            ClearAllPlacementPreviews();
 
             if (card == null)
             {
@@ -979,8 +1182,7 @@ namespace DarkForest
 
         void ExecutePendingCard(Vector3Int probe)
         {
-            hiddenView?.ClearPlacementPreview();
-            probeView?.ClearPlacementPreview();
+            ClearAllPlacementPreviews();
 
             if (pendingCard == null || pendingCard.grantedPower == null || pendingCard.grantedPower.power == null)
             {
@@ -1110,7 +1312,7 @@ namespace DarkForest
             }
             else
             {
-                hiddenView?.ShowPlacementPreview(def, ox, oy, placementRotation);
+                GetActiveHiddenView()?.ShowPlacementPreview(def, ox, oy, placementRotation);
                 Debug.Log("Cannot place here: blocked, out of bounds, or probed.");
             }
         }
@@ -1214,14 +1416,8 @@ namespace DarkForest
             int maxLayer = Mathf.Max(0, game.depth - 1);
             layerForPlacement = Mathf.Clamp(layerForPlacement, 0, maxLayer);
 
-            if (hiddenView)
-            {
-                hiddenView.layerToShow = layerForPlacement;
-            }
-            if (probeView)
-            {
-                probeView.layerToShow = layerForPlacement;
-            }
+            activeHiddenView = null;
+            activeProbeView = null;
 
             bool isPlacementPhase = game.phase == GameState.GamePhase.Placement;
             if (isPlacementPhase)
@@ -1241,6 +1437,7 @@ namespace DarkForest
                     awaitingTurnAdvance = false;
                 }
             }
+
             var defender = game.GetOpponent(active);
 
             int probesPerTurn = GetProbesPerTurn(active);
@@ -1251,8 +1448,55 @@ namespace DarkForest
             bool allowProbeClicks = ((!isPlacementPhase && !placingDuringTurn && active != null && defender != null && !game.gameOver && !awaitingDefenderDecision && hasProbeAvailable)
                                     || (pendingCard != null && pendingCard.grantedPower != null && pendingCard.grantedPower.power != null && pendingCard.grantedPower.power.timing == PowerTiming.OffensiveFaceUp));
 
-            if (hiddenView)
+            if (playerBoardViews != null && playerBoardViews.Length > 0)
             {
+                foreach (var viewSet in playerBoardViews)
+                {
+                    if (viewSet == null) continue;
+
+                    var owner = FindPlayerByTeam(viewSet.team);
+                    bool isActivePlayer = owner != null && owner == active;
+
+                    if (viewSet.hiddenView)
+                    {
+                        viewSet.hiddenView.layerToShow = layerForPlacement;
+                        if (owner != null)
+                        {
+                            viewSet.hiddenView.revealOccupants = true;
+                            viewSet.hiddenView.RenderHidden(owner, isActivePlayer && allowPlacementClicks);
+                        }
+                        else
+                        {
+                            viewSet.hiddenView.Clear();
+                        }
+                    }
+
+                    if (viewSet.probeView)
+                    {
+                        viewSet.probeView.layerToShow = layerForPlacement;
+                        var target = owner != null ? game.GetOpponent(owner) : null;
+                        if (owner != null && target != null)
+                        {
+                            viewSet.probeView.revealOccupants = false;
+                            viewSet.probeView.RenderCentral(owner, target, isActivePlayer && allowProbeClicks);
+                        }
+                        else
+                        {
+                            viewSet.probeView.Clear();
+                        }
+                    }
+
+                    if (isActivePlayer)
+                    {
+                        if (viewSet.hiddenView) activeHiddenView = viewSet.hiddenView;
+                        if (viewSet.probeView) activeProbeView = viewSet.probeView;
+                    }
+                }
+            }
+
+            if (activeHiddenView == null && hiddenView)
+            {
+                hiddenView.layerToShow = layerForPlacement;
                 if (active != null)
                 {
                     hiddenView.revealOccupants = true;
@@ -1262,10 +1506,12 @@ namespace DarkForest
                 {
                     hiddenView.Clear();
                 }
+                activeHiddenView = hiddenView;
             }
 
-            if (probeView)
+            if (activeProbeView == null && probeView)
             {
+                probeView.layerToShow = layerForPlacement;
                 if (active != null && defender != null)
                 {
                     probeView.revealOccupants = false;
@@ -1275,7 +1521,10 @@ namespace DarkForest
                 {
                     probeView.Clear();
                 }
+                activeProbeView = probeView;
             }
+
+            UpdateActiveCamera(active);
         }
 
         void RestartGame()
@@ -1414,7 +1663,7 @@ namespace DarkForest
 
                 if (!DysonPlacementEncirclesStar(player, ox, oy, oz))
                 {
-                    hiddenView?.ShowPlacementPreview(def, ox, oy, placementRotation);
+                    GetActiveHiddenView()?.ShowPlacementPreview(def, ox, oy, placementRotation);
                     Debug.Log("Dyson Sphere must be placed to encircle one of your Stars.");
                     return false;
                 }
